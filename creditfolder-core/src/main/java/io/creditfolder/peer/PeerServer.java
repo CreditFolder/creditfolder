@@ -28,6 +28,7 @@ public class PeerServer {
     @Autowired
     private MessageHandler messageHandler;
     private volatile ServerSocket serverSocket = null;
+    private volatile boolean isRunning = false;
 
     public void startAsync() {
         new Thread() {
@@ -41,21 +42,27 @@ public class PeerServer {
      * 启动Peer，等待其他节点连接
      */
     public void start() {
+        if (isRunning) {
+            logger.info("peerServer is already running");
+            return;
+        }
         try {
-            if (serverSocket == null) {
+            if (serverSocket == null || serverSocket.isClosed()) {
                 serverSocket = new ServerSocket(networkConfig.getServerPort());
             }
+            isRunning = true;
             logger.info("peerServer start success at port:{}", networkConfig.getServerPort());
             while (peerKeeper.getInConnectCount() < networkConfig.getMaxInConnect()) {
                 Socket incoming = serverSocket.accept();
-                logger.info("A peer connected, address:{}", incoming.getInetAddress());
                 Peer peer = new Peer(incoming);
+                logger.info("A peer connected {}", peer);
                 peerKeeper.addInConnect(peer);
                 Thread thread = new Thread(new MessageProcess(peer, messageHandler, peerKeeper));
                 thread.start();
             }
             if (peerKeeper.getInConnectCount() >= networkConfig.getMaxInConnect()) {
-                logger.info("serverSocket Close");
+                isRunning = false;
+                logger.info("peerServer has stoped");
                 serverSocket.close();
             }
         }
@@ -68,6 +75,7 @@ public class PeerServer {
      * 结束服务销毁socket
      */
     public void stop() {
+        isRunning = false;
         if (serverSocket != null) {
             try {
                 serverSocket.close();

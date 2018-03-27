@@ -112,4 +112,9 @@ public class Peer extends Seed {
         object.put("name", getName());
         return object;
     }
+
+    @Override
+    public String toString() {
+        return "Peer(" + getAddress().getAddress() + ":" + getAddress().getPort() + ")";
+    }
 }

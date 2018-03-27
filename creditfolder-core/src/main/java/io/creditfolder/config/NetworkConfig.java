@@ -35,4 +35,15 @@ public interface NetworkConfig {
      * @return
      */
     int getMaxInConnect();
+
+    /**
+     * 获取PRC服务的端口
+     * @return
+     */
+    int getRPCServerPort();
+
+    /**
+     * 是否种子：如果是种子节点，一开始不需要连接其他节点，常说中的第一个节点
+     */
+    boolean isSeed();
 }

@@ -28,7 +28,11 @@ public class PeerKeeper {
     private NetworkConfig networkConfig;
 
     /**
-     * 进入网络，启动本地节点，并从种子节点中获得连接
+     * 连接种子节点
+     * 启动三个线程：
+     * 1. 启动本地节点等待新节点连接
+     * 2. 检查已连接的节点是否连接正常
+     * 3. 每个节点的消息循环
      */
     public void start() {
         // 连接所有的种子节点
@@ -36,12 +40,18 @@ public class PeerKeeper {
 
         // 本地服务启动
         peerServer.startAsync();
+
+        // 检查连接状态
+        startPeerAliveCheckAsync();
     }
 
     /**
      * 连接所有的种子节点
      */
     private void connectAllSeedAsync() {
+        if (networkConfig.isSeed()) {
+            return;
+        }
         List<Seed> seedList = networkConfig.getAllSeed();
         for (Seed seed : seedList) {
             if (outConnectList.size() < networkConfig.getMaxOutConnect()) {
@@ -49,6 +59,15 @@ public class PeerKeeper {
                 thread.start();
             }
         }
+    }
+
+    /**
+     * 检查节点连接是否正常
+     */
+    private void startPeerAliveCheckAsync() {
+        logger.info("fucking cool");
+        Thread thread = new Thread(new PeerAliveChecker(this));
+        thread.start();
     }
 
     /**
@@ -113,9 +132,20 @@ public class PeerKeeper {
     public void removePeer(Peer peer) {
         if (outConnectList.contains(peer)) {
             outConnectList.remove(peer);
+            logger.info("remove peer {}", peer);
         }
         if (inConnectList.contains(peer)) {
             inConnectList.remove(peer);
+            logger.info("remove peer {}", peer);
         }
+        peerServer.startAsync();
+    }
+
+    public List<Peer> getOutConnectList() {
+        return outConnectList;
+    }
+
+    public List<Peer> getInConnectList() {
+        return inConnectList;
     }
 }

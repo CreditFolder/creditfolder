@@ -33,6 +33,10 @@ public class MessageHandler {
             response.put("message", "command 'getallpeers' can get my all peer connected");
             return response;
         }
+        else if ("ping".equals(command)) {
+            response.put("message", "connection alive");
+            return response;
+        }
         // 获取所有连接的节点
         else if ("getallpeers".equals(command)) {
             List<Peer> peerList = peerKeeper.getAllConnect();
