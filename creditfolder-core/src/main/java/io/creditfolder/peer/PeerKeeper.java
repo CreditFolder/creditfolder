@@ -1,6 +1,7 @@
 package io.creditfolder.peer;
 
 import io.creditfolder.config.NetworkConfig;
+import io.creditfolder.message.MessageHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,10 @@ public class PeerKeeper {
     private PeerServer peerServer;
     @Autowired
     private NetworkConfig networkConfig;
+    @Autowired
+    private PeerDiscovery peerDiscovery;
+    @Autowired
+    private MessageHandler messageHandler;
 
     /**
      * 连接种子节点
@@ -35,6 +40,7 @@ public class PeerKeeper {
      * 3. 每个节点的消息循环
      */
     public void start() {
+        logger.info("peerkeeper start");
         // 连接所有的种子节点
         connectAllSeedAsync();
 
@@ -42,7 +48,8 @@ public class PeerKeeper {
         peerServer.startAsync();
 
         // 检查连接状态
-        startPeerAliveCheckAsync();
+//        startPeerAliveCheckAsync();
+        logger.info("peerkeeper start finished");
     }
 
     /**
@@ -50,12 +57,18 @@ public class PeerKeeper {
      */
     private void connectAllSeedAsync() {
         if (networkConfig.isSeed()) {
+            logger.info("this is seed, don't connect any peer");
             return;
         }
         List<Seed> seedList = networkConfig.getAllSeed();
+        connectSeedList(seedList);
+    }
+
+    private void connectSeedList(List<Seed> seedList) {
         for (Seed seed : seedList) {
             if (outConnectList.size() < networkConfig.getMaxOutConnect()) {
-                Thread thread = new Thread(new SeedConnect(seed, this));
+                Thread thread = new Thread(new SeedConnect(seed, this, messageHandler));
+                thread.setName(seed.toString());
                 thread.start();
             }
         }
@@ -65,8 +78,7 @@ public class PeerKeeper {
      * 检查节点连接是否正常
      */
     private void startPeerAliveCheckAsync() {
-        logger.info("fucking cool");
-        Thread thread = new Thread(new PeerAliveChecker(this));
+        Thread thread = new Thread(new PeerAliveCountChecker(this, peerDiscovery));
         thread.start();
     }
 
@@ -138,7 +150,12 @@ public class PeerKeeper {
             inConnectList.remove(peer);
             logger.info("remove peer {}", peer);
         }
-        peerServer.startAsync();
+        if (networkConfig.getMinInConnect() < inConnectList.size()) {
+            peerServer.startAsync();
+        }
+        if (networkConfig.getMinOutConnect() < outConnectList.size()) {
+            peerDiscovery.connectMorePeer();
+        }
     }
 
     public List<Peer> getOutConnectList() {

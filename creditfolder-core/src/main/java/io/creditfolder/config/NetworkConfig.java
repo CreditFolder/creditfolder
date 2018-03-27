@@ -31,10 +31,22 @@ public interface NetworkConfig {
     int getMaxOutConnect();
 
     /**
+     * 获取允许主动连接的最小连接数
+     * @return
+     */
+    int getMinOutConnect();
+
+    /**
      * 获取允许被动连接的最大连接数
      * @return
      */
     int getMaxInConnect();
+
+    /**
+     * 获取允许被动连接的最小连接数
+     * @return
+     */
+    int getMinInConnect();
 
     /**
      * 获取PRC服务的端口

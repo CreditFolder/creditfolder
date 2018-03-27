@@ -1,6 +1,8 @@
 package io.creditfolder.rpc;
 
 import io.creditfolder.peer.Peer;
+import io.creditfolder.peer.PeerAliveCountChecker;
+import io.creditfolder.peer.PeerDiscovery;
 import io.creditfolder.peer.PeerKeeper;
 import org.codehaus.jettison.json.JSONArray;
 import org.codehaus.jettison.json.JSONException;
@@ -26,6 +28,8 @@ public class RPCMessageHandler {
     private static final Logger logger = LoggerFactory.getLogger(RPCMessageHandler.class);
     @Autowired
     private PeerKeeper peerKeeper;
+    @Autowired
+    private PeerDiscovery peerDiscovery;
 
     public String handle(String message) {
         if (StringUtils.isEmpty(message)) {
@@ -59,6 +63,15 @@ public class RPCMessageHandler {
                     }
                 }
                 return sb.toString();
+            }
+            case "alivecheck": {
+                PeerAliveCountChecker checker = new PeerAliveCountChecker(peerKeeper, peerDiscovery);
+                checker.run();
+                return "alive check finished";
+            }
+            case "morepeer": {
+                peerDiscovery.connectMorePeer();
+                return "morepeer has connected";
             }
             case "getallpeers": {
                 List<Peer> peerList = peerKeeper.getAllConnect();

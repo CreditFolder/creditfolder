@@ -37,6 +37,10 @@ public class MessageProcess implements Runnable {
     public void run() {
         try {
             while (peer.hasMessage()) {
+                logger.info("start message loop");
+                if (peer.isRequesting()) {
+                    continue;
+                }
                 JSONObject message = peer.read();
                 if ("exit".equals(message.getString("command"))) {
                     break;
@@ -44,11 +48,13 @@ public class MessageProcess implements Runnable {
                 JSONObject response = messageHandler.handle(message);
                 peer.write(response);
             }
+            logger.info("message loop finished");
         }
         catch (IOException e) {
             logger.error("MessageProcess error", e);
         }
         catch (JSONException e) {
+            logger.error("MessageProcess error", e);
             try {
                 JSONObject response = new JSONObject();
                 response.put("success", "false");

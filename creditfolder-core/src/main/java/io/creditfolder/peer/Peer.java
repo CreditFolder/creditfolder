@@ -9,6 +9,7 @@ import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.Objects;
 import java.util.Scanner;
 
 /**
@@ -18,6 +19,8 @@ import java.util.Scanner;
  * @since 2018年03月26日 16:25
  */
 public class Peer extends Seed {
+    /* 如果为True表示，等待远程节点响应 */
+    private volatile boolean isRequesting = false;
 
     public Peer(InetSocketAddress address) {
         super(address);
@@ -53,6 +56,17 @@ public class Peer extends Seed {
             return false;
         }
         return socket.isConnected();
+    }
+
+    public void request(JSONObject request) throws IOException {
+        isRequesting = true;
+        this.write(request);
+    }
+
+    public JSONObject getResponse() throws IOException, JSONException {
+        JSONObject response = this.read();
+        isRequesting = false;
+        return response;
     }
 
     /**
@@ -106,11 +120,27 @@ public class Peer extends Seed {
     }
 
     public JSONObject toJSONObject() throws JSONException {
-        JSONObject object = new JSONObject();
-        object.put("ip", getAddress().getAddress().toString());
-        object.put("port", getAddress().getPort());
-        object.put("name", getName());
-        return object;
+        return super.toJSONObject();
+    }
+
+    public static Peer parse(JSONObject jsonObject) throws JSONException {
+        Seed seed = Seed.parse(jsonObject);
+        return new Peer(seed);
+    }
+
+    public boolean isRequesting() {
+        return isRequesting;
+    }
+
+    // IP + port想通，则表示是同一个连接
+    @Override
+    public boolean equals(Object o) {
+        return super.equals(o);
+    }
+
+    @Override
+    public int hashCode() {
+        return super.hashCode();
     }
 
     @Override

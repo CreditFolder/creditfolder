@@ -8,7 +8,6 @@ io/creditfolder/config/MainNetworkConfig.class
 io/creditfolder/config/Config.class
 io/creditfolder/peer/Peer.class
 io/creditfolder/peer/PeerServer.class
-io/creditfolder/peer/PeerAliveChecker.class
 io/creditfolder/config/NetworkConfig.class
 io/creditfolder/peer/Seed.class
 io/creditfolder/message/MessageProcess.class
@@ -17,4 +16,6 @@ io/creditfolder/rpc/RPCMessageProcess.class
 io/creditfolder/peer/PeerServer$1.class
 io/creditfolder/CreditFolderApplication.class
 io/creditfolder/peer/PeerKeeper.class
+io/creditfolder/peer/PeerAliveCountChecker.class
+io/creditfolder/peer/PeerDiscovery.class
 io/creditfolder/rpc/RPCClient.class
