@@ -2,6 +2,7 @@
 /logs
 /.idea
 /target
+*/target/*
 *.class
 *.classpath
 *.iml
