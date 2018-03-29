@@ -1,7 +1,10 @@
 package io.creditfolder.message;
 
 import io.creditfolder.peer.Peer;
+import io.creditfolder.peer.PeerDiscovery;
 import io.creditfolder.peer.PeerKeeper;
+import io.creditfolder.seed.Seed;
+import io.creditfolder.seed.SeedKeeper;
 import org.codehaus.jettison.json.JSONArray;
 import org.codehaus.jettison.json.JSONException;
 import org.codehaus.jettison.json.JSONObject;
@@ -11,6 +14,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
 
 /**
  * 类概述
@@ -22,39 +26,105 @@ import java.util.List;
 public class MessageHandler {
     @Autowired
     private PeerKeeper peerKeeper;
+    @Autowired
+    private SeedKeeper seedKeeper;
+    @Autowired
+    private PeerDiscovery peerDiscovery;
 
-    public JSONObject handle(JSONObject message) throws JSONException {
-        JSONObject response = new JSONObject();
-        response.put("success", true);
+    public void handle(PeerMessage message) throws JSONException, IOException {
+        Peer sender = message.getSender();
+        JSONObject content = message.getContent();
+        String command = content.optString("command");
 
-        String command = message.getString("command");
-
-        if ("help".equals(command)) {
-            response.put("message", "command 'getallpeers' can get my all peer connected");
-            return response;
-        }
-        else if ("ping".equals(command)) {
-            response.put("message", "connection alive");
-            return response;
-        }
-        // 获取所有连接的节点
-        else if ("getallpeers".equals(command)) {
-            List<Peer> peerList = peerKeeper.getAllConnect();
-            List<JSONObject> peerInfoList = new ArrayList<>();
-
-            for (Peer peer : peerList) {
-                peerInfoList.add(peer.toJSONObject());
+        switch (command) {
+            case "help": {
+                JSONObject response = new JSONObject();
+                response.put("message", "command 'getallpeers' can get my all peer connected");
+                sender.write(response);
+                return;
             }
-            response.put("data", peerInfoList);
-            return response;
+            case "ping": {
+                JSONObject response = new JSONObject();
+                response.put("message", "connection alive");
+                sender.write(response);
+                return;
+            }
+            // 对方请求我要更多的节点
+            case "yourseeds": {
+                List<Seed> seedList = seedKeeper.getAllSeeds();
+                seedList.add(seedKeeper.getSeedMyself());
+                List<JSONObject> seedInfoList = new ArrayList<>();
+                for (Seed seed : seedList) {
+                    seedInfoList.add(seed.toJSONObject());
+                }
+                JSONObject response = new JSONObject();
+                response.put("command", "myseeds");
+                response.put("data", seedInfoList);
+                sender.write(response);
+                return;
+            }
+            // 告诉我当前连接的节点，让本节点建立更多的连接
+            // 获取到节点后，将节点信息加到阻塞队列中去，不要直接操作
+            case "myseeds": {
+                // 如果当前连接数量符合标准，则直接忽略这个消息
+                if (!peerDiscovery.needMoreOutPeers()) {
+                    return;
+                }
+                if (!content.has("data")) {
+                    return;
+                }
+                JSONArray jsonArray = content.optJSONArray("data");
+                List<Seed> seedList = new ArrayList<>();
+                int count = 0;
+                while (count < jsonArray.length()) {
+                    JSONObject seedJson = jsonArray.getJSONObject(count);
+                    Seed seed = Seed.parse(seedJson);
+                    seedList.add(seed);
+                    count++;
+                }
+                List<Seed> newSeedList = findNewSeeds(seedList);
+                for (Seed seed : newSeedList) {
+                    if (!SeedKeeper.seedsQueue.offer(seed)) {
+                        return;
+                    }
+                }
+                return;
+            }
+            // 对方想要获取我的连接地址
+            case "youraddress": {
+                JSONObject response = new JSONObject();
+                response.put("command", "myaddress");
+                response.put("data", seedKeeper.getSeedMyself().toJSONObject());
+                sender.write(response);
+                return;
+            }
+            case "myaddress": {
+                JSONObject jsonObject = content.optJSONObject("data");
+                Seed seed = Seed.parse(jsonObject);
+                return;
+            }
+            case "newblock": {
+                JSONObject response = new JSONObject();
+                response.put("message", "sorry, not support");
+                sender.write(response);
+                return;
+            }
+            default: {
+                return;
+            }
         }
-        else if ("newblock".equals(command)) {
-            response.put("message", "sorry, not support");
-            return response;
+    }
+
+    private List<Seed> findNewSeeds(List<Seed> seedList) {
+        List<Seed> result = new ArrayList<>();
+        for (Seed seed : seedList) {
+            if (seedKeeper.hasExist(seed) || seedKeeper.isMyself(seed)) {
+                continue;
+            }
+            else {
+                result.add(seed);
+            }
         }
-        else {
-            response.put("message", "I can't understand, type 'help' to get help");
-            return response;
-        }
+        return result;
     }
 }

@@ -1,6 +1,6 @@
 package io.creditfolder.config;
 
-import io.creditfolder.peer.Seed;
+import io.creditfolder.seed.Seed;
 
 import java.util.List;
 
@@ -58,4 +58,15 @@ public interface NetworkConfig {
      * 是否种子：如果是种子节点，一开始不需要连接其他节点，常说中的第一个节点
      */
     boolean isSeed();
+
+    /**
+     * 打印配置相关信息
+     */
+    void showInfo();
+
+    /**
+     * 获取节点名称
+     * @return
+     */
+    String getMySeedName();
 }

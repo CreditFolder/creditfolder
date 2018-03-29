@@ -1,9 +1,8 @@
 package io.creditfolder.rpc;
 
-import io.creditfolder.peer.Peer;
-import io.creditfolder.peer.PeerAliveCountChecker;
-import io.creditfolder.peer.PeerDiscovery;
-import io.creditfolder.peer.PeerKeeper;
+import io.creditfolder.peer.*;
+import io.creditfolder.seed.Seed;
+import io.creditfolder.seed.SeedKeeper;
 import org.codehaus.jettison.json.JSONArray;
 import org.codehaus.jettison.json.JSONException;
 import org.codehaus.jettison.json.JSONObject;
@@ -30,6 +29,8 @@ public class RPCMessageHandler {
     private PeerKeeper peerKeeper;
     @Autowired
     private PeerDiscovery peerDiscovery;
+    @Autowired
+    private SeedKeeper seedKeeper;
 
     public String handle(String message) {
         if (StringUtils.isEmpty(message)) {
@@ -64,30 +65,25 @@ public class RPCMessageHandler {
                 }
                 return sb.toString();
             }
+            case "seedinfo": {
+                List<Seed> seedList = seedKeeper.getAllSeeds();
+                if (CollectionUtils.isEmpty(seedList)) {
+                    return "没有任何种子节点信息";
+                }
+                StringBuilder stringBuilder = new StringBuilder();
+                for (Seed seed : seedList) {
+                    stringBuilder.append(seed.toString() + "\n");
+                }
+                return stringBuilder.toString();
+            }
             case "alivecheck": {
                 PeerAliveCountChecker checker = new PeerAliveCountChecker(peerKeeper, peerDiscovery);
                 checker.run();
                 return "alive check finished";
             }
             case "morepeer": {
-                peerDiscovery.connectMorePeer();
+                peerDiscovery.findMorePeers();
                 return "morepeer has connected";
-            }
-            case "getallpeers": {
-                List<Peer> peerList = peerKeeper.getAllConnect();
-                JSONArray jsonArray = new JSONArray();
-                List<JSONObject> peerJsonList = new ArrayList<>();
-                try {
-                    for (Peer peer : peerList) {
-                        peerJsonList.add(peer.toJSONObject());
-                    }
-                }
-                catch (JSONException e) {
-                    logger.error("peer.toJSONObject() error", e);
-                    return "system error";
-                }
-                jsonArray.put(peerJsonList);
-                return jsonArray.toString();
             }
             default:{
                 return  "命令无法识别，如需帮助，请输入'help'";

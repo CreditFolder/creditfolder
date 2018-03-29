@@ -30,7 +30,7 @@ public class PeerAliveCountChecker implements Runnable {
     public void run() {
         logger.info("start to check peer alive");
         while (true) {
-            List<Peer> peerList = peerKeeper.getAllConnect();
+            List<Peer> peerList = peerKeeper.getAllPeers();
             for (Peer peer : peerList) {
                 if (!isAlive(peer)) {
                     try {
@@ -42,7 +42,7 @@ public class PeerAliveCountChecker implements Runnable {
                     logger.info("peer {} is closed", peer);
                 }
             }
-            peerDiscovery.connectMorePeer();
+            peerDiscovery.findMorePeers();
             try {
                 // 每隔一分钟检查一次
                 Thread.sleep(60000);

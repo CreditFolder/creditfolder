@@ -1,15 +1,21 @@
 package io.creditfolder.peer;
 
 import io.creditfolder.config.NetworkConfig;
+import io.creditfolder.message.PeerMessage;
 import io.creditfolder.message.MessageHandler;
+import io.creditfolder.seed.Seed;
+import io.creditfolder.seed.SeedKeeper;
+import org.codehaus.jettison.json.JSONException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.net.*;
+import java.nio.channels.*;
+import java.nio.channels.spi.SelectorProvider;
+import java.util.*;
 
 /**
  * 管理所有的连接
@@ -31,6 +37,14 @@ public class PeerKeeper {
     private PeerDiscovery peerDiscovery;
     @Autowired
     private MessageHandler messageHandler;
+    @Autowired
+    private SeedKeeper seedKeeper;
+
+    private Selector selector;
+
+    public SelectionKey manageChannel(SelectableChannel channel, int ops, Object attachment) throws ClosedChannelException {
+        return channel.register(selector, ops, attachment);
+    }
 
     /**
      * 连接种子节点
@@ -40,38 +54,114 @@ public class PeerKeeper {
      * 3. 每个节点的消息循环
      */
     public void start() {
+        seedKeeper.init();
+        // 初始化自己的节点信息
+        try {
+            selector = SelectorProvider.provider().openSelector();
+        }
+        catch (IOException e) {
+            logger.info("peerkeeper start failed", e);
+        }
         logger.info("peerkeeper start");
+
         // 连接所有的种子节点
-        connectAllSeedAsync();
+        connectAllSeed();
 
         // 本地服务启动
-        peerServer.startAsync();
+        peerServer.start();
 
         // 检查连接状态
-//        startPeerAliveCheckAsync();
-        logger.info("peerkeeper start finished");
+        startPeerAliveCheckAsync();
+        messageLoop();
+    }
+
+    public void messageLoop() {
+        logger.info("start to message loop");
+        while (true) {
+            try {
+                int count = selector.select();
+                if (count <= 0) {
+                    continue;
+                }
+            }
+            catch (IOException e) {
+                logger.error("select.select() error", e);
+                continue;
+            }
+
+            Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
+            while (iterator.hasNext()) {
+                SelectionKey key = iterator.next();
+                iterator.remove();
+                try {
+                    if (key.isAcceptable()) {
+                        peerServer.newConnect(key);
+                    }
+                    else if (key.isConnectable()) {
+                        onSeedConnected(key);
+                    }
+                    else if (key.isWritable()) {
+                        Peer peer = (Peer) key.attachment();
+                        peer.doWrite(key);
+                    }
+                    else {
+                        Peer peer = Peer.getFromCache(key);
+                        try {
+                            PeerMessage peerMessage = peer.read(key);
+                            messageHandler.handle(peerMessage);
+                        }
+                        catch (PeerCloseException e) {
+                            removePeer(peer);
+                            peer.close();
+                        }
+                        catch (JSONException e) {
+                            logger.error("messageLoop error", e);
+                        }
+                    }
+                }
+                catch (IOException e) {
+                    logger.error("messageLoop error", e);
+                }
+            }
+        }
     }
 
     /**
      * 连接所有的种子节点
      */
-    private void connectAllSeedAsync() {
+    private void connectAllSeed() {
         if (networkConfig.isSeed()) {
-            logger.info("this is seed, don't connect any peer");
+            logger.info("this peer is seed, don't connect any peer");
             return;
         }
-        List<Seed> seedList = networkConfig.getAllSeed();
-        connectSeedList(seedList);
-    }
-
-    private void connectSeedList(List<Seed> seedList) {
-        for (Seed seed : seedList) {
-            if (outConnectList.size() < networkConfig.getMaxOutConnect()) {
-                Thread thread = new Thread(new SeedConnect(seed, this, messageHandler));
-                thread.setName(seed.toString());
-                thread.start();
+        for (Seed seed : networkConfig.getAllSeed()) {
+            if (!SeedKeeper.seedsQueue.offer(seed)) {
+                return;
             }
         }
+    }
+
+    private void onSeedConnected(SelectionKey key) throws IOException {
+        SocketChannel channel = (SocketChannel) key.channel();
+        // 不管了
+        try {
+            if (!channel.finishConnect()) {
+                key.cancel();
+                logger.info("connect {} failed", key.attachment());
+                return;
+            }
+        }
+        catch (ConnectException e) {
+            key.cancel();
+            logger.info("connect {} failed", key.attachment());
+            return;
+        }
+        Seed seed = (Seed)key.attachment();
+        Peer peer = Peer.open(key, seed);
+        addOutConnect(peer);
+        key.attach(peer);
+        key.interestOps(SelectionKey.OP_READ);
+        logger.info("peer connected success:{}", peer);
     }
 
     /**
@@ -94,6 +184,7 @@ public class PeerKeeper {
             catch (IOException e) {
                 logger.error("close peer error");
             }
+            peerServer.stop();
         }
         else {
             inConnectList.add(peer);
@@ -115,6 +206,7 @@ public class PeerKeeper {
         }
         else {
             outConnectList.add(peer);
+            seedKeeper.saveSeed(peer.getSeed());
         }
     }
 
@@ -126,11 +218,15 @@ public class PeerKeeper {
         return inConnectList.size();
     }
 
+    int getOutConnectCount() {
+        return outConnectList.size();
+    }
+
     /**
      * 获取所有的连接
      * @return
      */
-    public List<Peer> getAllConnect() {
+    public List<Peer> getAllPeers() {
         List<Peer> peerList = new ArrayList<>();
         peerList.addAll(outConnectList);
         peerList.addAll(inConnectList);
@@ -151,10 +247,10 @@ public class PeerKeeper {
             logger.info("remove peer {}", peer);
         }
         if (networkConfig.getMinInConnect() < inConnectList.size()) {
-            peerServer.startAsync();
+            peerServer.start();
         }
         if (networkConfig.getMinOutConnect() < outConnectList.size()) {
-            peerDiscovery.connectMorePeer();
+//            peerDiscovery.findMorePeers();
         }
     }
 
@@ -164,5 +260,9 @@ public class PeerKeeper {
 
     public List<Peer> getInConnectList() {
         return inConnectList;
+    }
+
+    public void wakeup() {
+        this.selector.wakeup();
     }
 }

@@ -1,72 +1,88 @@
 package io.creditfolder.peer;
 
+import io.creditfolder.message.PeerMessage;
+import io.creditfolder.seed.Seed;
 import org.codehaus.jettison.json.JSONException;
 import org.codehaus.jettison.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.PrintWriter;
 import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.util.Objects;
-import java.util.Scanner;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 类概述
+ * 只有连接了的节点才叫Peer，没有连接的充其量只能叫Seed，哈哈哈哈
  *
  * @author eleven@creditfolder.io
  * @since 2018年03月26日 16:25
  */
-public class Peer extends Seed {
-    /* 如果为True表示，等待远程节点响应 */
-    private volatile boolean isRequesting = false;
-
-    public Peer(InetSocketAddress address) {
-        super(address);
-    }
-
-    public Peer(InetSocketAddress address, String name) {
-        super(address, name);
-    }
-
-    public Peer(Seed seed) {
-        super(seed.getAddress(), seed.getName());
-    }
-
-    public Peer(Seed seed, Socket socket) {
-        super(seed.getAddress(), seed.getName());
-        this.socket = socket;
-    }
-
-    public Peer(Socket socket) {
-        super((InetSocketAddress)socket.getRemoteSocketAddress());
-        this.socket = socket;
-    }
-
+public class Peer {
+    private static final Logger logger = LoggerFactory.getLogger(Peer.class);
+    private static final Map<SelectionKey, Peer> allPeers = new ConcurrentHashMap<>();
+    /* 专门用于读的buffer */
+    private ByteBuffer readBuffer = ByteBuffer.allocateDirect(512);
+    /* 专门用于写入的buffer */
+    private ByteBuffer writeBuffer = null;
     /* socket地址 */
-    private transient Socket socket;
-    /* 输入流 */
-    private transient Scanner in;
-    /* 输出流 */
-    private transient PrintWriter out;
+    private transient SelectionKey selectionKey;
+    /* 目标ip */
+    private String ip;
+    /* 目标端口 */
+    private int port;
+    /* 目标节点 */
+    private Seed seed;
+
+    private void setSelectionKey(SelectionKey selectionKey) {
+        this.selectionKey = selectionKey;
+    }
+
+    public static Peer open(SelectionKey selectionKey) {
+        Peer peer = new Peer();
+        try {
+            peer.setSelectionKey(selectionKey);
+            SocketChannel channel = (SocketChannel)selectionKey.channel();
+            InetSocketAddress address = (InetSocketAddress)channel.getRemoteAddress();
+            peer.ip = address.getAddress().getHostAddress();
+            peer.port = address.getPort();
+            allPeers.put(selectionKey, peer);
+            return peer;
+        }
+        catch (IOException e) {
+            return null;
+        }
+    }
+
+    public static Peer open(SelectionKey selectionKey, Seed seed) {
+        Peer peer = Peer.open(selectionKey);
+        peer.seed = seed;
+        return peer;
+    }
+
+    public Seed getSeed() {
+        return seed;
+    }
+
+    /**
+     * 根据SelectionKey获取对应的节点
+     * @param key
+     * @return
+     */
+    public static Peer getFromCache(SelectionKey key) {
+        return allPeers.get(key);
+    }
 
     public boolean isConnected() {
-        if (socket == null) {
+        if (selectionKey == null) {
             return false;
         }
-        return socket.isConnected();
-    }
-
-    public void request(JSONObject request) throws IOException {
-        isRequesting = true;
-        this.write(request);
-    }
-
-    public JSONObject getResponse() throws IOException, JSONException {
-        JSONObject response = this.read();
-        isRequesting = false;
-        return response;
+        return (selectionKey.channel().isOpen());
     }
 
     /**
@@ -75,25 +91,47 @@ public class Peer extends Seed {
      * @throws IOException
      */
     public void write(JSONObject object) throws IOException {
-        if (out == null) {
-            OutputStream outputStream = socket.getOutputStream();
-            out = new PrintWriter(outputStream);
-        }
-        out.println(object.toString().trim());
-        out.flush();
+        byte[] content = object.toString().trim().getBytes();
+        logger.info("write {} content: {}", this, object.toString());
+        writeBuffer = ByteBuffer.allocateDirect(content.length);
+        writeBuffer.put(content);
+        selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
+        selectionKey.selector().wakeup();
     }
 
-    /**
-     * 读取一个对象
-     * @return
-     */
-    public JSONObject read() throws IOException, JSONException {
-        if (in == null) {
-            InputStream inputStream = socket.getInputStream();
-            in = new Scanner(inputStream);
+    public void doWrite(SelectionKey key) throws IOException {
+        if (writeBuffer == null) {
+            return;
         }
-        String message = in.nextLine();
-        return new JSONObject(message);
+        SocketChannel channel = (SocketChannel)key.channel();
+        writeBuffer.flip();
+        while (writeBuffer.hasRemaining()) {
+            channel.write(writeBuffer);
+        }
+        writeBuffer.clear();
+        writeBuffer = null;
+        selectionKey.interestOps(selectionKey.interestOps() & ~SelectionKey.OP_WRITE);
+    }
+
+    public PeerMessage read(SelectionKey key) throws IOException, JSONException, PeerCloseException {
+        readBuffer.clear();
+        SocketChannel channel = (SocketChannel)key.channel();
+        StringBuilder stringBuilder = new StringBuilder();
+        int count = 0;
+        while ((count = channel.read(readBuffer)) > 0) {
+            readBuffer.flip();
+            stringBuilder.append(StandardCharsets.UTF_8.decode(readBuffer).toString().trim());
+            readBuffer.clear();
+        }
+        if (count == -1) {
+            throw new PeerCloseException();
+        }
+        String content = stringBuilder.toString().trim();
+        logger.info("receive {} content: {}", this, content);
+        if (StringUtils.isEmpty(content)) {
+            return null;
+        }
+        return PeerMessage.build(new JSONObject(content), this);
     }
 
     /**
@@ -101,35 +139,8 @@ public class Peer extends Seed {
      * @throws IOException
      */
     public void close() throws IOException {
-        if (socket != null) {
-            socket.close();
-        }
-    }
-
-    public boolean hasMessage() {
-        if (in == null) {
-            try {
-                InputStream inputStream = socket.getInputStream();
-                in = new Scanner(inputStream);
-            }
-            catch (IOException e) {
-                return false;
-            }
-        }
-        return in.hasNextLine();
-    }
-
-    public JSONObject toJSONObject() throws JSONException {
-        return super.toJSONObject();
-    }
-
-    public static Peer parse(JSONObject jsonObject) throws JSONException {
-        Seed seed = Seed.parse(jsonObject);
-        return new Peer(seed);
-    }
-
-    public boolean isRequesting() {
-        return isRequesting;
+        allPeers.remove(selectionKey);
+        selectionKey.channel().close();
     }
 
     // IP + port想通，则表示是同一个连接
@@ -145,6 +156,6 @@ public class Peer extends Seed {
 
     @Override
     public String toString() {
-        return "Peer(" + getAddress().getAddress() + ":" + getAddress().getPort() + ")";
+        return "Peer(" + ip + ":" + port + ")";
     }
 }

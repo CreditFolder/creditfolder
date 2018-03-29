@@ -1,9 +1,11 @@
 package io.creditfolder;
 
+import io.creditfolder.config.NetworkConfig;
 import io.creditfolder.peer.PeerKeeper;
 import io.creditfolder.rpc.RPCServer;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.InitializingBean;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ApplicationContext;
@@ -34,10 +36,13 @@ public class CreditFolderApplication implements ApplicationContextAware, Initial
 
     @Override
     public void afterPropertiesSet() throws Exception {
-        PeerKeeper peerKeeper = applicationContext.getBean(PeerKeeper.class);
-        peerKeeper.start();
+        NetworkConfig networkConfig = applicationContext.getBean(NetworkConfig.class);
+        networkConfig.showInfo();
 
         RPCServer rpcServer = applicationContext.getBean(RPCServer.class);
         rpcServer.startAsync();
+
+        PeerKeeper peerKeeper = applicationContext.getBean(PeerKeeper.class);
+        peerKeeper.start();
     }
 }
