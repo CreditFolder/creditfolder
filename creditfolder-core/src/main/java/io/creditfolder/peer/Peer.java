@@ -1,19 +1,19 @@
 package io.creditfolder.peer;
 
-import io.creditfolder.message.PeerMessage;
+import io.creditfolder.message.command.Message;
+import io.creditfolder.message.MessageReader;
+import io.creditfolder.message.MessageSerializer;
+import io.creditfolder.message.ProtocolException;
 import io.creditfolder.seed.Seed;
-import org.codehaus.jettison.json.JSONException;
-import org.codehaus.jettison.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.util.StringUtils;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.nio.charset.StandardCharsets;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -26,12 +26,13 @@ import java.util.concurrent.ConcurrentHashMap;
 public class Peer {
     private static final Logger logger = LoggerFactory.getLogger(Peer.class);
     private static final Map<SelectionKey, Peer> allPeers = new ConcurrentHashMap<>();
-    /* 专门用于读的buffer */
-    private ByteBuffer readBuffer = ByteBuffer.allocateDirect(512);
+
     /* 专门用于写入的buffer */
     private ByteBuffer writeBuffer = null;
     /* socket地址 */
     private transient SelectionKey selectionKey;
+    /* 读取消息 */
+    private transient MessageReader messageReader = new MessageReader();
     /* 目标ip */
     private String ip;
     /* 目标端口 */
@@ -87,12 +88,12 @@ public class Peer {
 
     /**
      * 输出一个对象
-     * @param object
+     * @param message
      * @throws IOException
      */
-    public void write(JSONObject object) throws IOException {
-        byte[] content = object.toString().trim().getBytes();
-        logger.info("write {} content: {}", this, object.toString());
+    public void write(Message message) {
+        logger.info("write {} content: {}", this, message);
+        byte[] content = MessageSerializer.serialize(message);
         writeBuffer = ByteBuffer.allocateDirect(content.length);
         writeBuffer.put(content);
         selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
@@ -113,25 +114,19 @@ public class Peer {
         selectionKey.interestOps(selectionKey.interestOps() & ~SelectionKey.OP_WRITE);
     }
 
-    public PeerMessage read(SelectionKey key) throws IOException, JSONException, PeerCloseException {
-        readBuffer.clear();
-        SocketChannel channel = (SocketChannel)key.channel();
-        StringBuilder stringBuilder = new StringBuilder();
-        int count = 0;
-        while ((count = channel.read(readBuffer)) > 0) {
-            readBuffer.flip();
-            stringBuilder.append(StandardCharsets.UTF_8.decode(readBuffer).toString().trim());
-            readBuffer.clear();
+    public List<Message> read(SelectionKey key) throws IOException {
+        try {
+            List<Message> messageList = messageReader.read(key);
+            for (Message message : messageList) {
+                logger.info("receive {} content {}", this, message);
+            }
+            return messageList;
         }
-        if (count == -1) {
-            throw new PeerCloseException();
+        catch (ProtocolException | PeerCloseException e) {
+            logger.error("{} read error", this);
+            this.close();
+            return Collections.emptyList();
         }
-        String content = stringBuilder.toString().trim();
-        logger.info("receive {} content: {}", this, content);
-        if (StringUtils.isEmpty(content)) {
-            return null;
-        }
-        return PeerMessage.build(new JSONObject(content), this);
     }
 
     /**

@@ -1,11 +1,9 @@
 package io.creditfolder.rpc;
 
+import io.creditfolder.message.MessageSender;
 import io.creditfolder.peer.*;
 import io.creditfolder.seed.Seed;
 import io.creditfolder.seed.SeedKeeper;
-import org.codehaus.jettison.json.JSONArray;
-import org.codehaus.jettison.json.JSONException;
-import org.codehaus.jettison.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,7 +11,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -31,6 +28,8 @@ public class RPCMessageHandler {
     private PeerDiscovery peerDiscovery;
     @Autowired
     private SeedKeeper seedKeeper;
+    @Autowired
+    private MessageSender messageSender;
 
     public String handle(String message) {
         if (StringUtils.isEmpty(message)) {
@@ -76,14 +75,15 @@ public class RPCMessageHandler {
                 }
                 return stringBuilder.toString();
             }
-            case "alivecheck": {
-                PeerAliveCountChecker checker = new PeerAliveCountChecker(peerKeeper, peerDiscovery);
-                checker.run();
-                return "alive check finished";
-            }
             case "morepeer": {
                 peerDiscovery.findMorePeers();
                 return "morepeer has connected";
+            }
+            case "ping": {
+                for (Peer peer : peerKeeper.getAllPeers()) {
+                    messageSender.ping(peer);
+                }
+                return "ping success";
             }
             default:{
                 return  "命令无法识别，如需帮助，请输入'help'";

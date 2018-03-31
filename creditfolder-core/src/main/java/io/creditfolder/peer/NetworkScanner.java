@@ -1,9 +1,10 @@
 package io.creditfolder.peer;
 
-import org.codehaus.jettison.json.JSONException;
-import org.codehaus.jettison.json.JSONObject;
+import io.creditfolder.message.command.PingMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.List;
@@ -14,20 +15,24 @@ import java.util.List;
  * @author eleven@creditfolder.io
  * @since 2018年03月27日 15:18
  */
-public class PeerAliveCountChecker implements Runnable {
-    private static final Logger logger = LoggerFactory.getLogger(PeerAliveCountChecker.class);
+@Component
+public class NetworkScanner {
+    private static final Logger logger = LoggerFactory.getLogger(NetworkScanner.class);
 
+    @Autowired
     private PeerKeeper peerKeeper;
-
+    @Autowired
     private PeerDiscovery peerDiscovery;
 
-    public PeerAliveCountChecker(PeerKeeper peerKeeper, PeerDiscovery peerDiscovery) {
-        this.peerKeeper = peerKeeper;
-        this.peerDiscovery = peerDiscovery;
+    public void startAsync() {
+        new Thread() {
+            public void run() {
+                NetworkScanner.this.start();
+            }
+        }.start();
     }
 
-    @Override
-    public void run() {
+    public void start() {
         logger.info("start to check peer alive");
         while (true) {
             List<Peer> peerList = peerKeeper.getAllPeers();
@@ -55,19 +60,8 @@ public class PeerAliveCountChecker implements Runnable {
     }
 
     private boolean isAlive(Peer peer) {
-        try {
-            JSONObject pingMessage = new JSONObject();
-            pingMessage.put("command", "ping");
-            peer.write(pingMessage);
-            return true;
-        }
-        catch (JSONException e) {
-            logger.error("peer {} alive throw jsonexception", peer, e);
-            return false;
-        }
-        catch (IOException e) {
-            logger.error("peer is closed: peer{}", peer);
-            return false;
-        }
+        PingMessage message = new PingMessage();
+        peer.write(message);
+        return true;
     }
 }

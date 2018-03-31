@@ -1,9 +1,7 @@
 package io.creditfolder.seed;
 
-import org.codehaus.jettison.json.JSONException;
-import org.codehaus.jettison.json.JSONObject;
+import com.alibaba.fastjson.JSONObject;
 
-import java.net.InetSocketAddress;
 import java.util.Objects;
 
 /**
@@ -80,7 +78,7 @@ public class Seed {
         return name;
     }
 
-    public JSONObject toJSONObject() throws JSONException {
+    public JSONObject toJSONObject() {
         JSONObject object = new JSONObject();
         object.put("ip", ip);
         object.put("port", port);
@@ -88,10 +86,10 @@ public class Seed {
         return object;
     }
 
-    public static Seed parse(JSONObject jsonObject) throws JSONException {
-        String ip = jsonObject.optString("ip");
-        int port = jsonObject.optInt("port");
-        String name = jsonObject.optString("name");
+    public static Seed parse(JSONObject jsonObject) {
+        String ip = jsonObject.getString("ip");
+        int port = jsonObject.getInteger("port");
+        String name = jsonObject.getString("name");
         return new Seed(ip, port, name);
     }
 

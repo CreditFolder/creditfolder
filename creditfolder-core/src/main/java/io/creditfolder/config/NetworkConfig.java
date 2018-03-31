@@ -12,11 +12,20 @@ import java.util.List;
  */
 public interface NetworkConfig {
 
+    String KEY_SERVER_PORT = "server.port";
+    String KEY_MAX_IN_CONNECT = "max.in.connect";
+    String KEY_MIN_IN_CONNECT = "min.in.connect";
+    String KEY_MAX_OUT_CONNECT = "max.out.connect";
+    String KEY_MIN_OUT_CONNECT = "min.out.connect";
+    String KEY_RPC_SERVER_PORT = "rpc.server.port";
+    String KEY_ISGENESIS = "isgenesis";
+    String KEY_MY_SEED_NAME = "my.seed.name";
+
     /**
      * 获取所有的种子
      * @return
      */
-    List<Seed> getAllSeed();
+    List<Seed> getAllSuperSeed();
 
     /**
      * 获取钱包端口
@@ -55,14 +64,9 @@ public interface NetworkConfig {
     int getRPCServerPort();
 
     /**
-     * 是否种子：如果是种子节点，一开始不需要连接其他节点，常说中的第一个节点
+     * 是否是创世节点
      */
-    boolean isSeed();
-
-    /**
-     * 打印配置相关信息
-     */
-    void showInfo();
+    boolean isGenesisSeed();
 
     /**
      * 获取节点名称

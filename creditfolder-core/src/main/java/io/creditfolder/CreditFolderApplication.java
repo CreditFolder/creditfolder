@@ -1,11 +1,10 @@
 package io.creditfolder;
 
-import io.creditfolder.config.NetworkConfig;
+import io.creditfolder.config.Config;
 import io.creditfolder.peer.PeerKeeper;
 import io.creditfolder.rpc.RPCServer;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.InitializingBean;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ApplicationContext;
@@ -20,6 +19,7 @@ import org.springframework.context.annotation.ImportResource;
  */
 @SpringBootApplication
 @ImportResource("classpath*:spring/*.xml")
+//@ComponentScan("io.creditfolder.config")
 public class CreditFolderApplication implements ApplicationContextAware, InitializingBean {
 
     private ApplicationContext applicationContext;
@@ -36,8 +36,7 @@ public class CreditFolderApplication implements ApplicationContextAware, Initial
 
     @Override
     public void afterPropertiesSet() throws Exception {
-        NetworkConfig networkConfig = applicationContext.getBean(NetworkConfig.class);
-        networkConfig.showInfo();
+        Config.showInfo();
 
         RPCServer rpcServer = applicationContext.getBean(RPCServer.class);
         rpcServer.startAsync();

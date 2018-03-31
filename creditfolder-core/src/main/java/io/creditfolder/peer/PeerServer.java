@@ -1,6 +1,6 @@
 package io.creditfolder.peer;
 
-import io.creditfolder.config.NetworkConfig;
+import io.creditfolder.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,8 +22,6 @@ import java.nio.channels.SocketChannel;
 public class PeerServer {
     private static final Logger logger = LoggerFactory.getLogger(PeerServer.class);
 
-    @Autowired
-    private NetworkConfig networkConfig;
     @Autowired
     private PeerKeeper peerKeeper;
 
@@ -49,10 +47,10 @@ public class PeerServer {
             serverSocketChannel = ServerSocketChannel.open();
             serverSocketChannel.configureBlocking(false);
             serverSocket = serverSocketChannel.socket();
-            serverSocket.bind(new InetSocketAddress(networkConfig.getServerPort()));
+            serverSocket.bind(new InetSocketAddress(Config.SERVER_PORT));
             SelectionKey selectionKey = peerKeeper.manageChannel(serverSocketChannel, SelectionKey.OP_ACCEPT, this);
             this.selectionKey = selectionKey;
-            logger.info("peerServer start success at port:{}", networkConfig.getServerPort());
+            logger.info("peerServer start success at port:{}", Config.SERVER_PORT);
         }
         catch (IOException e) {
             logger.error("PeerServer start failed", e);
@@ -69,7 +67,7 @@ public class PeerServer {
         socketKey.attach(peer);
         logger.info("a peer connected:{}", peer);
         // 如果大于当前最大连接数，则停止peerServer服务
-        if (peerKeeper.getInConnectCount() >= networkConfig.getMaxInConnect()) {
+        if (peerKeeper.getInConnectCount() >= Config.MAX_IN_CONNECT) {
             this.stop();
         }
     }

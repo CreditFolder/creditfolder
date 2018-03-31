@@ -1,11 +1,11 @@
 package io.creditfolder.peer;
 
-import io.creditfolder.config.NetworkConfig;
-import io.creditfolder.message.PeerMessage;
+import io.creditfolder.config.Config;
+import io.creditfolder.message.command.Message;
 import io.creditfolder.message.MessageHandler;
 import io.creditfolder.seed.Seed;
 import io.creditfolder.seed.SeedKeeper;
-import org.codehaus.jettison.json.JSONException;
+import io.creditfolder.seed.SeedQueueConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,13 +32,15 @@ public class PeerKeeper {
     @Autowired
     private PeerServer peerServer;
     @Autowired
-    private NetworkConfig networkConfig;
-    @Autowired
     private PeerDiscovery peerDiscovery;
     @Autowired
     private MessageHandler messageHandler;
     @Autowired
     private SeedKeeper seedKeeper;
+    @Autowired
+    private SeedQueueConsumer seedQueueConsumer;
+    @Autowired
+    private NetworkScanner networkScanner;
 
     private Selector selector;
 
@@ -54,7 +56,6 @@ public class PeerKeeper {
      * 3. 每个节点的消息循环
      */
     public void start() {
-        seedKeeper.init();
         // 初始化自己的节点信息
         try {
             selector = SelectorProvider.provider().openSelector();
@@ -64,14 +65,18 @@ public class PeerKeeper {
         }
         logger.info("peerkeeper start");
 
-        // 连接所有的种子节点
-        connectAllSeed();
-
+        seedKeeper.init();
         // 本地服务启动
         peerServer.start();
+        // 开始消费阻塞队列中等待连接的Seed
+        seedQueueConsumer.startAsync();
+
+        // 连接所有的种子节点
+        connectSuperSeed();
 
         // 检查连接状态
-        startPeerAliveCheckAsync();
+        networkScanner.startAsync();
+
         messageLoop();
     }
 
@@ -106,16 +111,10 @@ public class PeerKeeper {
                     }
                     else {
                         Peer peer = Peer.getFromCache(key);
-                        try {
-                            PeerMessage peerMessage = peer.read(key);
-                            messageHandler.handle(peerMessage);
-                        }
-                        catch (PeerCloseException e) {
-                            removePeer(peer);
-                            peer.close();
-                        }
-                        catch (JSONException e) {
-                            logger.error("messageLoop error", e);
+
+                        List<Message> messageList = peer.read(key);
+                        for (Message message : messageList) {
+                            messageHandler.handle(message, peer);
                         }
                     }
                 }
@@ -129,13 +128,13 @@ public class PeerKeeper {
     /**
      * 连接所有的种子节点
      */
-    private void connectAllSeed() {
-        if (networkConfig.isSeed()) {
-            logger.info("this peer is seed, don't connect any peer");
+    private void connectSuperSeed() {
+        if (Config.ISGENESIS) {
+            logger.info("this peer is genesisSeed, don't connect any peer");
             return;
         }
-        for (Seed seed : networkConfig.getAllSeed()) {
-            if (!SeedKeeper.seedsQueue.offer(seed)) {
+        for (Seed seed : Config.SUPERSEEDLIST) {
+            if (!SeedKeeper.newSeedsQueue.offer(seed)) {
                 return;
             }
         }
@@ -165,19 +164,11 @@ public class PeerKeeper {
     }
 
     /**
-     * 检查节点连接是否正常
-     */
-    private void startPeerAliveCheckAsync() {
-        Thread thread = new Thread(new PeerAliveCountChecker(this, peerDiscovery));
-        thread.start();
-    }
-
-    /**
      * 将被动连接增加到peerkeeper
      * @param peer
      */
     void addInConnect(Peer peer) {
-        if (inConnectList.size() >= networkConfig.getMaxInConnect()) {
+        if (inConnectList.size() >= Config.MAX_IN_CONNECT) {
             try {
                 peer.close();
             }
@@ -196,7 +187,7 @@ public class PeerKeeper {
      * @param peer
      */
     void addOutConnect(Peer peer) {
-        if (outConnectList.size() >= networkConfig.getMaxOutConnect()) {
+        if (outConnectList.size() >= Config.MAX_OUT_CONNECT) {
             try {
                 peer.close();
             }
@@ -246,10 +237,10 @@ public class PeerKeeper {
             inConnectList.remove(peer);
             logger.info("remove peer {}", peer);
         }
-        if (networkConfig.getMinInConnect() < inConnectList.size()) {
+        if (Config.MIN_IN_CONNECT < inConnectList.size()) {
             peerServer.start();
         }
-        if (networkConfig.getMinOutConnect() < outConnectList.size()) {
+        if (Config.MIN_OUT_CONNECT < outConnectList.size()) {
 //            peerDiscovery.findMorePeers();
         }
     }

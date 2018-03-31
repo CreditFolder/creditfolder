@@ -6,7 +6,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.util.StringUtils;
 
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,7 +19,7 @@ import java.util.List;
 public class MainNetworkConfig implements NetworkConfig {
     private static final Logger logger = LoggerFactory.getLogger(MainNetworkConfig.class);
 
-    private static final List<Seed> seedList = new ArrayList<>();
+    private static final List<Seed> superSeedList = new ArrayList<>();
     // 钱包服务器端口
     private static final int SERVER_PORT_DEFAULT = 10086;
     // 当被动连接数大于等于这个数的时候，关闭被动连接端口
@@ -32,29 +31,21 @@ public class MainNetworkConfig implements NetworkConfig {
     // 当主动连接小于这个数的时候，主动连接其他节点
     private static final int MIN_OUT_CONNECT_DEFAULT = 2;
     private static final int RPC_SERVER_PORT_DEFAULT = 1111;
-    private static final boolean ISSEED_DEFAULT = false;
-
-    private static final String KEY_SERVER_PORT = "server.port";
-    private static final String KEY_MAX_IN_CONNECT = "max.in.connect";
-    private static final String KEY_MIN_IN_CONNECT = "min.in.connect";
-    private static final String KEY_MAX_OUT_CONNECT = "max.out.connect";
-    private static final String KEY_MIN_OUT_CONNECT = "min.out.connect";
-    private static final String KEY_RPC_SERVER_PORT = "rpc.server.port";
-    private static final String KEY_ISSEED = "isseed";
-    private static final String KEY_MY_SEED_NAME = "my.seed.name";
+    private static final boolean ISGENESIS_DEFAULT = false;
+    private static final String MY_SEED_NAME_DEFAULT = "anonymous";
 
     static {
         // creditfolder tokyo服务器地址
-        // seedList.add(new Seed(new InetSocketAddress("13.231.146.23", SERVER_PORT_DEFAULT)));
-        seedList.add(new Seed("192.168.1.100", SERVER_PORT_DEFAULT, "test.creditfolder.io"));
+        // superSeedList.add(new Seed(new InetSocketAddress("13.231.146.23", SERVER_PORT_DEFAULT)));
+        superSeedList.add(new Seed("192.168.1.103", SERVER_PORT_DEFAULT, "test.creditfolder.io"));
     }
 
     public MainNetworkConfig() {
     }
 
     @Override
-    public List<Seed> getAllSeed() {
-        return seedList;
+    public List<Seed> getAllSuperSeed() {
+        return superSeedList;
     }
 
     @Override
@@ -112,10 +103,10 @@ public class MainNetworkConfig implements NetworkConfig {
     }
 
     @Override
-    public boolean isSeed() {
-        String isSeed = System.getProperty(KEY_ISSEED);
+    public boolean isGenesisSeed() {
+        String isSeed = System.getProperty(KEY_ISGENESIS);
         if (StringUtils.isEmpty(isSeed)) {
-            return ISSEED_DEFAULT;
+            return ISGENESIS_DEFAULT;
         }
         return Boolean.parseBoolean(isSeed);
     }
@@ -127,23 +118,10 @@ public class MainNetworkConfig implements NetworkConfig {
             return mySeedName;
         }
         try {
-            return InetAddress.getLocalHost().getHostAddress();
+            return InetAddress.getLocalHost().getHostName();
         }
         catch (UnknownHostException e) {
-            return "anonymous";
+            return MY_SEED_NAME_DEFAULT;
         }
-    }
-
-    @Override
-    public void showInfo() {
-        logger.info("* CreditFolder Wallet Start Info *");
-        logger.info("* " + KEY_SERVER_PORT + "=" + getServerPort());
-        logger.info("* " + KEY_MAX_IN_CONNECT + "=" + getMaxInConnect());
-        logger.info("* " + KEY_MIN_IN_CONNECT + "=" + getMinInConnect());
-        logger.info("* " + KEY_MAX_OUT_CONNECT + "=" + getMaxOutConnect());
-        logger.info("* " + KEY_MIN_OUT_CONNECT + "=" + getMinOutConnect());
-        logger.info("* " + KEY_ISSEED + "=" + isSeed());
-        logger.info("* " + KEY_RPC_SERVER_PORT + "=" + getRPCServerPort());
-        logger.info("* " + KEY_MY_SEED_NAME + "=" + getMySeedName());
     }
 }

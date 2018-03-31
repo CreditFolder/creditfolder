@@ -1,6 +1,6 @@
 package io.creditfolder.rpc;
 
-import io.creditfolder.config.NetworkConfig;
+import io.creditfolder.config.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,8 +19,6 @@ import java.net.Socket;
 @Component
 public class RPCServer {
     private static final Logger logger = LoggerFactory.getLogger(RPCServer.class);
-    @Autowired
-    private NetworkConfig networkConfig;
     private ServerSocket serverSocket = null;
     private volatile boolean isRunning = false;
     @Autowired
@@ -38,11 +36,11 @@ public class RPCServer {
     public void start() {
         try {
             if (serverSocket == null || serverSocket.isClosed()) {
-                serverSocket = new ServerSocket(networkConfig.getRPCServerPort());
+                serverSocket = new ServerSocket(Config.RPC_SERVER_PORT);
                 serverSocket.setReuseAddress(true);
             }
             isRunning = true;
-            logger.info("rpc server is start at port: {}", networkConfig.getRPCServerPort());
+            logger.info("rpc server is start at port: {}", Config.RPC_SERVER_PORT);
             while (isRunning) {
                 Socket socket = serverSocket.accept();
                 Thread thread = new Thread(new RPCMessageProcess(messageHandler, socket));

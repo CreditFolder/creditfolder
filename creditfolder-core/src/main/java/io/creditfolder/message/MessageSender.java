@@ -1,9 +1,8 @@
 package io.creditfolder.message;
 
+import io.creditfolder.message.command.*;
 import io.creditfolder.peer.Peer;
 import io.creditfolder.peer.PeerKeeper;
-import org.codehaus.jettison.json.JSONException;
-import org.codehaus.jettison.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,29 +23,30 @@ public class MessageSender {
     @Autowired
     private PeerKeeper peerKeeper;
 
-    public void broadCastMoreSeeds() {
-        JSONObject command = new JSONObject();
-        try {
-            command.put("command", "yourseeds");
-            broadCast(command);
-        }
-        catch (JSONException e) {
-            logger.error("build command error", e);
-        }
+    public void ping(Peer peer) {
+        peer.write(new PingMessage());
+    }
+
+    public void pong(Peer peer) {
+        peer.write(new PongMessage());
+    }
+
+    public void address(Peer peer, AddressMessage message) {
+        peer.write(message);
+    }
+
+    public void broadGetAddress() {
+        GetAddressMessage message = new GetAddressMessage();
+        broadCast(message);
     }
 
     /**
      * 广播
-     * @param command
+     * @param message
      */
-    private void broadCast(JSONObject command) {
+    private void broadCast(Message message) {
         for (Peer peer : peerKeeper.getAllPeers()) {
-            try {
-                peer.write(command);
-            }
-            catch (IOException e) {
-                logger.error("broadcast command to peer {} error command {}", peer, command, e);
-            }
+            peer.write(message);
         }
     }
 }

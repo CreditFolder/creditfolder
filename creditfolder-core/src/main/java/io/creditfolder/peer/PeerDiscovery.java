@@ -1,6 +1,6 @@
 package io.creditfolder.peer;
 
-import io.creditfolder.config.NetworkConfig;
+import io.creditfolder.config.Config;
 import io.creditfolder.message.MessageSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -8,7 +8,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * 负责寻找更多节点
+ * Nodes discover their own external address by various methods.
+ * Nodes read the callback address of remote nodes that connect to them.
+ * Nodes makes DNS request to read IP addresses.
+ * Nodes can use addresses hard coded into the software.
+ * Nodes exchange addresses with other nodes.
+ * Nodes store addresses in a database and read that database on startup.
+ * Nodes can be provided addresses as command line arguments
+ * Nodes read addresses from a user provided text file on startup
  *
  * @author eleven@creditfolder.io
  * @since 2018年03月27日 19:03
@@ -17,8 +24,6 @@ import org.springframework.stereotype.Component;
 public class PeerDiscovery {
     private static final Logger logger = LoggerFactory.getLogger(PeerDiscovery.class);
 
-    @Autowired
-    private NetworkConfig networkConfig;
     @Autowired
     private PeerKeeper peerKeeper;
     @Autowired
@@ -29,7 +34,7 @@ public class PeerDiscovery {
      */
     public void findMorePeers() {
         if (needMoreOutPeers()) {
-            messageSender.broadCastMoreSeeds();
+            messageSender.broadGetAddress();
         }
     }
 
@@ -38,6 +43,6 @@ public class PeerDiscovery {
      * @return
      */
     public boolean needMoreOutPeers() {
-        return peerKeeper.getOutConnectCount() < networkConfig.getMinOutConnect();
+        return peerKeeper.getOutConnectCount() < Config.MIN_OUT_CONNECT;
     }
 }
