@@ -33,4 +33,9 @@ public class IPUtil {
             }
         }
     }
+
+    public static void main(String args[]) {
+        String ip = IPUtil.getExternalIp();
+        System.out.println(ip);
+    }
 }

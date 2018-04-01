@@ -27,13 +27,17 @@ public class SeedKeeper {
     private CopyOnWriteArraySet<Seed> currentSeedList = new CopyOnWriteArraySet<>();
 
     public void init() {
-        try {
-            String ip = InetAddress.getLocalHost().getHostAddress();
-            seedMyself = new Seed(ip, Config.SERVER_PORT, Config.MY_SEED_NAME);
-        }
-        catch (UnknownHostException e) {
-            logger.error("build myselfseed error");
-        }
+//        try {
+//            String ip = InetAddress.getLocalHost().getHostAddress();
+//            seedMyself = new Seed(ip, Config.SERVER_PORT, Config.MY_SEED_NAME);
+//        }
+//        catch (UnknownHostException e) {
+//            logger.error("build myselfseed error");
+//        }
+    }
+
+    public void setSeedMyself(Seed seedMyself) {
+        this.seedMyself = seedMyself;
     }
 
     /**
